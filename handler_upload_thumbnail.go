@@ -1,9 +1,12 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/auth"
 	"github.com/google/uuid"
@@ -60,14 +63,38 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 		respondWithError(w, http.StatusUnauthorized, "You are not authorized to upload this video", err)
 	}
 
-	thumb := thumbnail{
-		data:      imageData,
-		mediaType: mediaType,
+	var extension string
+
+	switch mediaType {
+	case "image/jpeg":
+		extension = ".jpg"
+		break
+	case "image/png":
+		extension = ".png"
+		break
+	case "image/gif":
+		extension = ".gif"
+		break
+	case "image/webp":
+		extension = ".webp"
+		break
+	default:
+		respondWithError(w, http.StatusBadRequest, "Couldn't recognize file type", err)
 	}
 
-	videoThumbnails[videoID] = thumb
+	path := filepath.Join(cfg.assetsRoot, videoIDString+"."+extension)
 
-	url := "http://localhost:" + cfg.port + "/api/thumbnails/" + videoID.String()
+	f, err := os.Create(path)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create file", err)
+	}
+
+	_, err = io.Copy(f, bytes.NewReader(imageData))
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create file", err)
+	}
+
+	url := fmt.Sprintf("http://localhost:%s/assets/%s.%s", cfg.port, videoID, extension)
 
 	video.ThumbnailURL = &url
 
