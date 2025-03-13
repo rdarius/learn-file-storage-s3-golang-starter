@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"mime"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -41,11 +42,13 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Couldn't parse multipart form", err)
+		return
 	}
 
 	image, header, err := r.FormFile("thumbnail")
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Couldn't get file", err)
+		return
 	}
 
 	mediaType := header.Header.Get("Content-Type")
@@ -53,33 +56,37 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	imageData, err := io.ReadAll(image)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Couldn't read image", err)
+		return
 	}
 
 	video, err := cfg.db.GetVideo(videoID)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Couldn't find video", err)
+		return
 	}
 	if video.UserID != userID {
 		respondWithError(w, http.StatusUnauthorized, "You are not authorized to upload this video", err)
+		return
 	}
 
 	var extension string
 
-	switch mediaType {
+	mimeType, _, err := mime.ParseMediaType(mediaType)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Couldn't parse multipart form", err)
+		return
+	}
+
+	switch mimeType {
 	case "image/jpeg":
 		extension = ".jpg"
 		break
 	case "image/png":
 		extension = ".png"
 		break
-	case "image/gif":
-		extension = ".gif"
-		break
-	case "image/webp":
-		extension = ".webp"
-		break
 	default:
 		respondWithError(w, http.StatusBadRequest, "Couldn't recognize file type", err)
+		return
 	}
 
 	path := filepath.Join(cfg.assetsRoot, videoIDString+"."+extension)
@@ -87,11 +94,13 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	f, err := os.Create(path)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create file", err)
+		return
 	}
 
 	_, err = io.Copy(f, bytes.NewReader(imageData))
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create file", err)
+		return
 	}
 
 	url := fmt.Sprintf("http://localhost:%s/assets/%s.%s", cfg.port, videoID, extension)
@@ -101,11 +110,13 @@ func (cfg *apiConfig) handlerUploadThumbnail(w http.ResponseWriter, r *http.Requ
 	err = cfg.db.UpdateVideo(video)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Couldn't update video", err)
+		return
 	}
 
 	video, err = cfg.db.GetVideo(videoID)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Couldn't find video", err)
+		return
 	}
 
 	respondWithJSON(w, http.StatusOK, video)
