@@ -1,12 +1,16 @@
 package main
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
+	"fmt"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"log"
 	"net/http"
 	"os"
+	"os/exec"
 
 	"github.com/bootdotdev/learn-file-storage-s3-golang-starter/internal/database"
 
@@ -30,6 +34,38 @@ type apiConfig struct {
 type thumbnail struct {
 	data      []byte
 	mediaType string
+}
+
+func getVideoAspectRatio(filePath string) (string, error) {
+	cmd := exec.Command("ffprobe", "-v", "error", "-print_format", "json", "-show_streams", filePath)
+	var buffer bytes.Buffer
+	cmd.Stdout = &buffer
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+
+	type Stream struct {
+		Index              int    `json:"index"`
+		Width              int    `json:"width"`
+		Height             int    `json:"height"`
+		DisplayAspectRatio string `json:"display_aspect_ratio"`
+	}
+
+	type VideoInfo struct {
+		Streams []Stream `json:"streams"`
+	}
+
+	var videoInfo VideoInfo
+
+	err = json.Unmarshal(buffer.Bytes(), &videoInfo)
+	if err != nil {
+		fmt.Println(err)
+		return "", err
+	}
+
+	return videoInfo.Streams[0].DisplayAspectRatio, nil
+
 }
 
 func main() {
