@@ -68,6 +68,18 @@ func getVideoAspectRatio(filePath string) (string, error) {
 
 }
 
+func processVideoForFastStart(filePath string) (string, error) {
+	newName := filePath + ".processing"
+	cmd := exec.Command("ffmpeg", "-i", filePath, "-c", "copy", "-movflags", "faststart", "-f", "mp4", newName)
+	var buffer bytes.Buffer
+	cmd.Stdout = &buffer
+	err := cmd.Run()
+	if err != nil {
+		return "", err
+	}
+	return newName, nil
+}
+
 func main() {
 	godotenv.Load(".env")
 

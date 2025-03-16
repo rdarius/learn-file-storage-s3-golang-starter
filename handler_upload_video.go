@@ -135,12 +135,26 @@ func (cfg *apiConfig) handlerUploadVideo(w http.ResponseWriter, r *http.Request)
 
 	tempFile.Seek(0, io.SeekStart)
 
+	converted, err := processVideoForFastStart(tempFile.Name())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't process video", err)
+		return
+	}
+
 	fileName := prefix + "/" + videoPathName + extension
+
+	cFile, err := os.ReadFile(converted)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't read converted file", err)
+		return
+	}
+
+	cReader := bytes.NewReader(cFile)
 
 	_, err = cfg.s3Client.PutObject(context.Background(), &s3.PutObjectInput{
 		Bucket:      &cfg.s3Bucket,
 		Key:         &fileName,
-		Body:        tempFile,
+		Body:        cReader,
 		ContentType: &mimeType,
 	})
 	if err != nil {
